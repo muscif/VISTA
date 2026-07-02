@@ -15,11 +15,11 @@ from PIL import Image
 from ultralytics import YOLO
 from json_repair import repair_json
 from vista.qwen import get_model
-from vista.utils import set_seed, image_to_base64, resize_image, log, IGNORE_CATEGORIES
-from vista.utils import get_emergency_level
+from vista.utilss import set_seed, image_to_base64, resize_image, log, IGNORE_CATEGORIES
+from vista.utilss import get_emergency_level
 
 
-os.environ["HF_HOME"] = "/media/nvme/pasquale/HF"
+os.environ["HF_HOME"] = "./HF"
 
 
 # ============================================================
