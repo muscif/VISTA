@@ -1,7 +1,7 @@
 from collections import defaultdict
 
+import numpy as np
 from PIL import Image
-from PIL.Image import Resampling
 from supervision.detection.core import Detections
 from trackers import BoTSORTTracker
 import torch
@@ -224,7 +224,6 @@ class DeepTrackerACM:  # Appearance - Class - Motion
 
         return detections
 
-import numpy as np
 
 class DeepTrackerA: # Appearance
     def __init__(self, embedder: Embedder, threshold: float):
