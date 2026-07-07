@@ -105,8 +105,6 @@ class DeepTrackerAM: # Appearance - Motion
             self.history[track_id] = embeddings_current[row_idx]
 
         return detections
-    
-from collections import defaultdict
 
 
 class DeepTrackerACM:  # Appearance - Class - Motion
