@@ -29,13 +29,13 @@ class Embedder:
         return list(embeddings.unbind(0))
 
 
-class DeepTrackerAM: # Appearance - Motion
+class DeepTrackerAM:  # Appearance - Motion
     def __init__(self, embedder: Embedder, threshold: float):
         self.embedder = embedder
         self.threshold = threshold
         self.history: dict[int, torch.Tensor] = {}
 
-    def update(self, detections: Detections, frame: Image.Image):
+    def update(self, detections: Detections, frame: Image.Image, tracker: BoTSORTTracker):
         new_ids = []
         known_ids = []
         crops = []
@@ -56,7 +56,7 @@ class DeepTrackerAM: # Appearance - Motion
 
         if not crops:
             return detections
-        
+
         embeddings_current = self.embedder.embed(crops)
         if not self.history:
             for row_idx, track_id in zip(query_rows, new_ids):
@@ -70,6 +70,8 @@ class DeepTrackerAM: # Appearance - Motion
             if track_id not in known_ids:
                 history_pool_ids.append(track_id)
                 history_pool_vals.append(embedding)
+
+        id_to_tracklet = {t.tracker_id: t for t in tracker.tracks}
 
         if history_pool_vals:
             embeddings_history = torch.stack(history_pool_vals)
@@ -86,13 +88,24 @@ class DeepTrackerAM: # Appearance - Motion
             for idx_cur, idx_hist in zip(row_ind, col_ind):
                 cos = sim[idx_cur][idx_hist]
                 original_row_idx = query_rows[idx_cur]
+                new_id = new_ids[idx_cur]
 
                 if cos > self.threshold:
                     correct_id = history_pool_ids[idx_hist]
                     detections.tracker_id[original_row_idx] = correct_id
+
+                    tracklet_new = id_to_tracklet.get(new_id)
+                    tracklet_old = id_to_tracklet.get(correct_id)
+                    if tracklet_old is not None and tracklet_old is not tracklet_new:
+                        tracker.tracks = [t for t in tracker.tracks if id(t) != id(tracklet_old)]
+                        id_to_tracklet.pop(correct_id, None)
+                    if tracklet_new is not None:
+                        tracklet_new.tracker_id = correct_id
+                        id_to_tracklet[correct_id] = tracklet_new
+                        id_to_tracklet.pop(new_id, None)
                 else:
-                    correct_id = new_ids[idx_cur]
-                
+                    correct_id = new_id
+
                 self.history[correct_id] = embeddings_current[original_row_idx]
                 matched_queries.add(idx_cur)
 
@@ -111,7 +124,6 @@ class DeepTrackerACM:  # Appearance - Class - Motion
     def __init__(self, embedder: Embedder, threshold: float):
         self.embedder = embedder
         self.threshold = threshold
-        # track_id -> (embedding, class_id)
         self.history: dict[int, tuple[torch.Tensor, str]] = {}
 
     def update(self, detections: Detections, frame: Image.Image, tracker: BoTSORTTracker):
@@ -154,8 +166,6 @@ class DeepTrackerACM:  # Appearance - Class - Motion
                 history_pool_vals.append(embedding)
                 history_pool_classes.append(cls)
 
-        # tracker_id -> live tracklet, so we can rewrite the tracker's own
-        # bookkeeping, not just this frame's output detections
         id_to_tracklet = {t.tracker_id: t for t in tracker.tracks}
 
         if history_pool_vals:
@@ -194,8 +204,6 @@ class DeepTrackerACM:  # Appearance - Class - Motion
                         correct_id = history_pool_ids[cls_hist_idx[idx_hist]]
                         detections.tracker_id[original_row_idx] = correct_id
 
-                        # Option 1: drop the old (lost) tracklet, keep the new
-                        # tracklet's fresher Kalman state, just relabeled.
                         tracklet_new = id_to_tracklet.get(new_id)
                         tracklet_old = id_to_tracklet.get(correct_id)
                         if tracklet_old is not None and tracklet_old is not tracklet_new:
