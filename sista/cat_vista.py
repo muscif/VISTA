@@ -11,31 +11,56 @@ from tracker import Embedder
 
 
 class SISTA(VistaPipeline):
-    def __init__(self, caption_stride=30):
+    def __init__(
+        self,
+        caption_stride=30,
+        tracker_name=None,
+        embedder_name="facebook/dinov2-with-registers-large",
+        caption_iou_threshold=0.5,
+        reid_similarity_threshold=0.5,
+    ):
         from rfdetr_plus import RFDETR2XLarge as RFDETR
-        from tracker import DeepTrackerACM as DeepTracker
+        #from rfdetr import RFDETRLarge as RFDETR
+
+        embedder = Embedder(embedder_name)
+
+        self.tracker_name = tracker_name
+
+        match self.tracker_name:
+            case "am":
+                from tracker import DeepTrackerAM
+
+                self.deep_tracker = DeepTrackerAM(embedder, reid_similarity_threshold)
+            case "acm":
+                from tracker import DeepTrackerACM
+
+                self.deep_tracker = DeepTrackerACM(embedder, reid_similarity_threshold)
+            case _:
+                self.deep_tracker = None
+
 
         self.model = RFDETR()
         self.model.optimize_for_inference(dtype=torch.bfloat16, compile=True)
         self.tracker = Tracker(enable_cmc=True)
         self.captioner = None
-        #self.captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct-FP8")
+        # self.captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct-FP8")
         self.caption_stride = caption_stride
-        self.iou_threshold = 0.5
+        self.caption_iou_threshold = caption_iou_threshold
         self.history = {}
         self.crop = True
         self.draw_bboxes = False
-        self.deep_tracker = DeepTracker(Embedder("facebook/dinov2-with-registers-large"), 0.5)
-        self.reid = True
 
     def forward(self, frame: Image.Image, frame_idx: int) -> FrameResult:
-        results = self.model.predict(frame)
+        results = self.model.predict(frame, shape=(1400,1400))
         results = self.tracker.update(results, frame=results.metadata["source_image"])
 
-        if self.reid:
+        if self.deep_tracker:
             results = self.deep_tracker.update(results, frame, self.tracker)
 
-        detections = {res[4]: Detection(res[0].tolist(), vocab_mapping(res[3]), 1, res[4]) for i, res in enumerate(results)}
+        detections = {
+            int(res[4]): Detection(res[0].tolist(), vocab_mapping(res[3]), 1, int(res[4]))
+            for i, res in enumerate(results) if int(res[4]) != -1
+        }
 
         if self.draw_bboxes:
             frame = draw_bboxes_single(frame, detections)
@@ -54,10 +79,15 @@ class SISTA(VistaPipeline):
                 best_id = None
 
                 for detection in detections.values():
-                    caption_bbox = (caption.bbox[0] + min_x1, caption.bbox[1] + min_y1, caption.bbox[2] + min_x1, caption.bbox[3] + min_y1)
+                    caption_bbox = (
+                        caption.bbox[0] + min_x1,
+                        caption.bbox[1] + min_y1,
+                        caption.bbox[2] + min_x1,
+                        caption.bbox[3] + min_y1,
+                    )
                     iou = _iou(detection.bbox, caption_bbox)
 
-                    if iou > self.iou_threshold and iou > best_iou:
+                    if iou > self.caption_iou_threshold and iou > best_iou:
                         best_iou = iou
                         best_id = detection.track_id
 
@@ -67,17 +97,11 @@ class SISTA(VistaPipeline):
 
         for det_id in detections:
             if detections[det_id].caption is None:
-                capt = self.history.get(
-                    det_id, detections[det_id].category
-                )
+                capt = self.history.get(det_id, detections[det_id].category)
                 detections[det_id].caption = f"{det_id}: {capt}"
 
-        return FrameResult(
-            detections=list(detections.values()),
-            frame_idx=frame_idx
-        )
+        return FrameResult(detections=list(detections.values()), frame_idx=frame_idx)
 
     def reset(self):
         super().reset()
-        self.__init__(self.caption_stride)
-    
+        self.__init__(self.caption_stride, tracker_name=self.tracker_name)
