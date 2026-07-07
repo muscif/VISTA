@@ -1,16 +1,10 @@
 import os
 from pathlib import Path
 import time
-import tomllib
 
-import bbox_visualizer as bbv
-import cv2
-from PIL import Image
-
-from detect import Detector, DetectorYOLO
-from caption import Captioner, CaptionerQwen3VL
-from sista_whole import SISTA
-from base import FrameResult, Detection
+from cat_vista import SISTA
+from utils import draw_bboxes
+from tqdm import tqdm
 
 PATH_BASE = Path(".")
 PATH_DATA = PATH_BASE / "data"
@@ -20,58 +14,19 @@ PATH_VISTA = PATH_DATA / "VISTADataset"
 os.environ["HF_HUB_DISABLE_XET"] = "1"
 
 
-def draw_bboxes(path: Path, frames: list[FrameResult]):
-    vid = cv2.VideoCapture(path)
-
-    fps = vid.get(cv2.CAP_PROP_FPS)
-    width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # or "avc1", "XVID" depending on codec support
-    out = cv2.VideoWriter("out.mkv", fourcc, fps, (width, height))
-
-    success = True
-    i_frame = 0
-
-    while success:
-        success, image = vid.read()
-
-        if success:
-            res = frames[i_frame].detections
-
-            bboxes = []
-            labels = []
-            for d in res:
-                bboxes.append([int(n) for n in d.bbox])
-                labels.append(d.caption)
-
-            img = bbv.draw_multiple_boxes(image, bboxes)
-            img = bbv.add_multiple_labels(img, labels, bboxes, size=0.4, thickness=1)
-
-            out.write(img)
-
-        i_frame += 1
-
-        if i_frame >= len(frames):
-            break
-
-    vid.release()
-    out.release()
-
-
 if __name__=="__main__":
-    detector: Detector = DetectorYOLO("yolo26x_visdrone.pt", 800)
-    captioner: Captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct-FP8")
+    model = SISTA()
 
-    model = SISTA(detector, captioner, 60, 0.3)
+    #path, start_frame, end_frame = PATH_VISTA / "train" / "20251120" / "DJI_20251120172410_0001_S.mp4", 12500, 12780
+    path, start_frame, end_frame = PATH_VISTA / "train" / "20251205" / "DJI_20251205134959_0001_S.mp4", 2320, 3070
+    #path, start_frame, end_frame = PATH_VISTA / "train" / "20251204" / "DJI_20251204135749_0001_S.mp4", 676, 740
+    #path, start_frame, end_frame = PATH_VISTA / "train" / "20260318" / "DJI_20260318101426_0002_V.MP4", 5800, 7300
+    #path, start_frame, end_frame = PATH_VISTA / "train" / "20260318" / "DJI_20260318102010_0003_V.MP4", 4778, 6128
 
-    path = PATH_VISTA / "train" / "20251120" / "DJI_20251120172410_0001_S.mp4"
-
-    start_frame = 4320
-    duration = 360
-    
+    results = []
     t0 = time.perf_counter()
-    results = [res for res in model.process_video(path, start_frame=start_frame, end_frame=start_frame + duration)]
+    for res in tqdm(model.process_video(path, start_frame=start_frame, end_frame=end_frame), leave=False, total=end_frame-start_frame):
+        results.append(res)
     elapsed = time.perf_counter() - t0
 
     frame_count = len(results)
