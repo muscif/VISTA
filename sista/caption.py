@@ -1,50 +1,34 @@
-from abc import ABC, abstractmethod
+import unsloth
+
+from abc import ABC
 from dataclasses import dataclass
 import json
 
 from PIL import Image
 import torch
 
+from utils import postprocess_boxes
+
 
 system_prompt = """
-    You are an operator supervising a drone operation over an accident scene.
-    Your task is to detect and label all relevant objects in the images.
-    
-    Focus on the following:
-    1. Vehicles:
-    - Identify and classify all vehicles, including cars, trucks, motorcycles, bicycles only if they are involved in the accident.
-    - Distinguish between:
-        * Vehicles involved in the accident
-        * Emergency or helping vehicles
+    You are an operator supervising a drone operation over a vehicle accident scene.
+    Your task is to detect and caption all relevant vehicles and people in the image.
 
-    2. People:
-    - Detect all people present in the scene.
-    - Describe their actions and status, including but not limited to: injured, hurt, standing, sitting, walking, running, helping others, calling for help, etc.
-    - Include this information in the label.
+    Only caption and describe vehicles and people involved in an accident, including rescue or helping vehicles.
+    The caption and description must focus on the role and involvement vehicles and people have in the accident scene.
 
-    Output format:
-    - Return a valid JSON array with bounding boxes for all detected elements in the form:
-    `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "detailed description"}, ...]`
-    - Ensure each object is labeled with a precise description containing information regarding the object's or the person's involvement the accident.
+    The bounding boxes have already been drawn for all objects in the scene, both involved and not involved in the accident.
+
+    You need to caption exclusively the vehicles objects involved in an accident.
+    If a vehicle or person is NOT involved in an accident, explicitly state so.
+    The caption must be as short and dense as possible.
+
+    Output format: valid JSON array with bounding boxes for all detected elements in the form: `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "detailed description"}, ...]`
 """
 
 user_prompt = """
-    Detect and label all relevant objects and persons in this frame, only if they are involved in an accident.
-    
+    Detect and label all relevant vehicles and persons in this frame, only if they are involved in an accident.
 """
-
-
-def postprocess_boxes(data, img):
-    width, height = img.size
-    for item in data:
-        x1, y1, x2, y2 = item["bbox_2d"]
-        item["bbox_2d"] = [
-            x1 / 1000 * width,
-            y1 / 1000 * height,
-            x2 / 1000 * width,
-            y2 / 1000 * height,
-        ]
-    return data
 
 
 @dataclass
@@ -53,18 +37,12 @@ class Caption:
     caption: str
 
 
-class Captioner(ABC):
-    @abstractmethod
-    def caption(self, img: Image.Image) -> list[Caption]:
-        pass
-
-
-class CaptionerQwen3VL(Captioner):
+class CaptionerQwen3VL:
     def __init__(self, model_name):
         from unsloth import FastVisionModel
 
         self.model, processor = FastVisionModel.from_pretrained(
-            model_name=model_name, load_in_4bit=True, float8_kv_cache=True, disable_log_stats=True
+            model_name=model_name, load_in_4bit=True
         )
 
         FastVisionModel.for_inference(self.model)
