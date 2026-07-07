@@ -1,3 +1,5 @@
+from collections import defaultdict
+import csv
 from pathlib import Path
 
 import cv2
@@ -6,6 +8,12 @@ import numpy as np
 from PIL import Image
 
 from base import FrameResult, Detection
+
+
+PATH_BASE = Path(".")
+PATH_DATA = PATH_BASE / "data"
+PATH_VISTA = PATH_DATA / "VISTADataset"
+
 
 def _iou(a, b) -> float:
     xA, yA = max(a[0], b[0]), max(a[1], b[1])
@@ -18,6 +26,7 @@ def _iou(a, b) -> float:
     aB = (b[2] - b[0]) * (b[3] - b[1])
 
     return inter / (aA + aB - inter)
+
 
 def postprocess_boxes(data, img):
     width, height = img.size
@@ -32,22 +41,23 @@ def postprocess_boxes(data, img):
     return data
 
 
-def draw_bboxes_single(frame: Image.Image, detections: dict[int, Detection]) -> Image.Image:
+def draw_bboxes_single(
+    frame: Image.Image, detections: dict[int, Detection]
+) -> Image.Image:
     bboxes = []
     for det in detections.values():
         bboxes.append([int(n) for n in det.bbox])
 
-    
     img = bbv.draw_multiple_boxes(np.asarray(frame), bboxes)
     return Image.fromarray(img)
 
 
-def draw_bboxes(path: Path, frames: list[FrameResult]):
+def draw_bboxes(path: Path, frames: list[FrameResult], deep_tracker):
     if not frames:
         return
-        
+
     vid = cv2.VideoCapture(str(path))
-    
+
     # Seek to the exact frame where the results start
     start_frame = frames[0].frame_idx
     if start_frame > 0:
@@ -58,7 +68,10 @@ def draw_bboxes(path: Path, frames: list[FrameResult]):
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter("out.mkv", fourcc, fps, (width, height))
+    video_id = path.parts[-1].removesuffix(path.suffix)
+    out = cv2.VideoWriter(
+        f"out/{video_id}_{deep_tracker}.mkv", fourcc, fps, (width, height)
+    )
 
     success = True
     i_frame = 0
@@ -79,7 +92,9 @@ def draw_bboxes(path: Path, frames: list[FrameResult]):
                     labels.append(d.caption)
 
                 img = bbv.draw_multiple_boxes(img, bboxes)
-                img = bbv.add_multiple_labels(img, labels, bboxes, size=0.4, thickness=1)
+                img = bbv.add_multiple_labels(
+                    img, labels, bboxes, size=0.4, thickness=1
+                )
 
             out.write(img)
 
@@ -92,14 +107,52 @@ def draw_bboxes(path: Path, frames: list[FrameResult]):
     out.release()
 
 
-def prediction_tracks(video_frames: dict[str, list[FrameResult]]):
-    for video_id, frame_results in video_frames:
-        pass
+# video_id, track_id, frame_start, frame_end, caption
+def prediction_tracks(video_frames: dict[str, list[FrameResult]], fout="out.csv"):
+    video_tracks = defaultdict(list)
+    for video_id, frame_results in video_frames.items():
+        for frame_result in frame_results:
+            for detection in frame_result.detections:
+                video_tracks[(video_id, detection.track_id)].append(
+                    (frame_result.frame_idx, detection.caption)
+                )
+
+                # print(video_id, frame_result.frame_idx, detection.track_id, detection.caption)
+
+    rows = []
+    for (video_id, track_id), els in video_tracks.items():
+        els_sorted = sorted(els, key=lambda x: x[0])
+
+        interval_start, interval_caption = els_sorted[0]
+        interval_end = interval_start
+        prev_frame = interval_start
+
+        intervals = []
+        for frame_idx, caption in els_sorted[1:]:
+            if frame_idx == prev_frame + 1:
+                interval_end = frame_idx
+            else:
+                intervals.append((interval_start, interval_end, interval_caption))
+                interval_start, interval_caption = frame_idx, caption
+                interval_end = frame_idx
+            prev_frame = frame_idx
+
+        intervals.append((interval_start, interval_end, interval_caption))  # flush last
+
+        for interval_start, interval_end, caption in intervals:
+            rows.append((video_id, track_id, interval_start, interval_end, caption))
+
+    with open(fout, "w", encoding="utf-8", newline="") as outfile:
+        writer = csv.writer(outfile)
+        writer.writerow(["video_id", "track_id", "frame_start", "frame_end", "caption"])
+        writer.writerows(rows)
 
 
+# video_id, frame_id, track_id, x1, y1, x2, y2, conf, category
 def predictions_mot(video_frames: dict[str, list[FrameResult]]):
     for video_id, frame_results in video_frames:
         pass
+
 
 def vocab_mapping(predict) -> str:
     match predict:
@@ -109,9 +162,11 @@ def vocab_mapping(predict) -> str:
             return "vehicle"
         case _:
             return "other"
-        
 
-def get_smallest_bbox(detections: dict[int, Detection]) -> tuple[float, float, float, float]:
+
+def get_smallest_bbox(
+    detections: dict[int, Detection],
+) -> tuple[float, float, float, float]:
     min_x1 = float("inf")
     min_y1 = float("inf")
     max_x2 = 0
@@ -134,4 +189,9 @@ def get_smallest_bbox(detections: dict[int, Detection]) -> tuple[float, float, f
 
 def expand_bbox(bbox, amount: float) -> tuple[float, float, float, float]:
     assert -1 <= amount <= 1, "Amount must be in [-1, 1]"
-    return bbox[0] * 1-amount, bbox[1] * 1-amount, bbox[2] * 1+amount, bbox[3] * 1+amount
+    return (
+        bbox[0] * 1 - amount,
+        bbox[1] * 1 - amount,
+        bbox[2] * 1 + amount,
+        bbox[3] * 1 + amount,
+    )
