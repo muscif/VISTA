@@ -28,7 +28,7 @@ def _iou(a, b) -> float:
     return inter / (aA + aB - inter)
 
 
-def compute_fps(fps_stats: dict[str, list]):
+def compute_fps(fps_stats: dict[str, list], fout="fps_stats.csv"):
     rows = []
     for video_id, timings in fps_stats.items():
         timings = timings[1:]  # exclude first frame (setup/warmup overhead)
@@ -38,7 +38,7 @@ def compute_fps(fps_stats: dict[str, list]):
 
         rows.append((video_id, min_fps, avg_fps))
 
-    with open("fps_stats.csv", "w", encoding="utf-8", newline="") as fout:
+    with open(fout, "w", encoding="utf-8", newline="") as fout:
         writer = csv.writer(fout)
         writer.writerow(["video_id", "fps_min", "fps_avg"])
         writer.writerows(rows)
