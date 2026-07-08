@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 import time
 
 from tqdm import tqdm
@@ -7,19 +5,15 @@ from tqdm import tqdm
 from cat_vista import SISTA
 from utils import draw_bboxes, PATH_VISTA, prediction_tracks, predictions_mot, compute_fps
 
-os.environ["HF_HUB_DISABLE_XET"] = "1"
-
-
 if __name__=="__main__":
     tracker_name = "acm"
-    model = SISTA(tracker_name=tracker_name, caption_stride=60, caption=True)
+    model = SISTA(tracker_name=tracker_name, caption_stride=300, caption=True)
 
     things = [
-        (PATH_VISTA / "train" / "20251120" / "DJI_20251120172410_0001_S.mp4", 12500, 12780),
-        #(PATH_VISTA / "train" / "20251205" / "DJI_20251205134959_0001_S.mp4", 2320, 3070),
-        #(PATH_VISTA / "train" / "20251204" / "DJI_20251204135749_0001_S.mp4", 676, 740),
-        #(PATH_VISTA / "train" / "20260318" / "DJI_20260318101426_0002_V.MP4", 5800, 7300),
-        #(PATH_VISTA / "train" / "20260318" / "DJI_20260318102010_0003_V.MP4", 4778, 6128)
+        (PATH_VISTA / "test" / "20251210" / "DJI_20251210134636_0001_S.mp4", 0, 6695),
+        (PATH_VISTA / "test" / "20251210" / "DJI_20251210140457_0001_S.mp4", 0, 9320),
+        (PATH_VISTA / "test" / "20251217" / "DJI_20251217111534_0001_S.mp4", 0, 25874),
+        (PATH_VISTA / "test" / "20251217" / "DJI_20251217114349_0001_S.MP4", 0, 9237),
     ]
 
     videos = {}
@@ -44,7 +38,7 @@ if __name__=="__main__":
         fps_stats[video_id] = timings
         draw_bboxes(path, results, tracker_name)
 
-    compute_fps(fps_stats)
-    prediction_tracks(videos, "prediction_tracks_train.csv")
-    predictions_mot(videos, "predictions_mot_train.csv")
 
+    prediction_tracks(videos, fout="predictions_tracks.csv")
+    predictions_mot(videos, fout="predictions_mot.csv")
+    compute_fps(fps_stats)

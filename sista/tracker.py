@@ -118,6 +118,9 @@ class DeepTrackerAM:  # Appearance - Motion
             self.history[track_id] = embeddings_current[row_idx]
 
         return detections
+    
+    def reset(self):
+        self.history = {}
 
 
 class DeepTrackerACM:  # Appearance - Class - Motion
@@ -229,6 +232,9 @@ class DeepTrackerACM:  # Appearance - Class - Motion
             self.history[track_id] = (embeddings_current[row_idx], row_classes[row_idx])
 
         return detections
+    
+    def reset(self):
+        self.history = {}
 
 
 class DeepTrackerA: # Appearance
@@ -276,3 +282,6 @@ class DeepTrackerA: # Appearance
                 self.history[correct_id] = embeddings_current[idx_cur]
 
         return detections
+    
+    def reset(self):
+        self.history = {}

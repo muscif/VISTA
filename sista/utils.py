@@ -28,6 +28,22 @@ def _iou(a, b) -> float:
     return inter / (aA + aB - inter)
 
 
+def compute_fps(fps_stats: dict[str, list]):
+    rows = []
+    for video_id, timings in fps_stats.items():
+        timings = timings[1:]  # exclude first frame (setup/warmup overhead)
+        fps_values = [1.0 / t for t in timings if t > 0]
+        min_fps = min(fps_values)
+        avg_fps = sum(fps_values) / len(fps_values)
+
+        rows.append((video_id, min_fps, avg_fps))
+
+    with open("fps_stats.csv", "w", encoding="utf-8", newline="") as fout:
+        writer = csv.writer(fout)
+        writer.writerow(["video_id", "fps_min", "fps_avg"])
+        writer.writerows(rows)
+
+
 def postprocess_boxes(data, img):
     width, height = img.size
     for item in data:
@@ -114,10 +130,8 @@ def prediction_tracks(video_frames: dict[str, list[FrameResult]], fout="out.csv"
         for frame_result in frame_results:
             for detection in frame_result.detections:
                 video_tracks[(video_id, detection.track_id)].append(
-                    (frame_result.frame_idx, detection.caption)
+                    (frame_result.frame_idx, detection.caption.split(":")[-1].strip())
                 )
-
-                # print(video_id, frame_result.frame_idx, detection.track_id, detection.caption)
 
     rows = []
     for (video_id, track_id), els in video_tracks.items():
@@ -131,6 +145,7 @@ def prediction_tracks(video_frames: dict[str, list[FrameResult]], fout="out.csv"
         for frame_idx, caption in els_sorted[1:]:
             if frame_idx == prev_frame + 1:
                 interval_end = frame_idx
+                interval_caption = caption
             else:
                 intervals.append((interval_start, interval_end, interval_caption))
                 interval_start, interval_caption = frame_idx, caption
@@ -149,9 +164,25 @@ def prediction_tracks(video_frames: dict[str, list[FrameResult]], fout="out.csv"
 
 
 # video_id, frame_id, track_id, x1, y1, x2, y2, conf, category
-def predictions_mot(video_frames: dict[str, list[FrameResult]]):
-    for video_id, frame_results in video_frames:
-        pass
+def predictions_mot(video_frames: dict[str, list[FrameResult]], fout="predictions_mot.csv"):
+    rows = []
+    for video_id, frame_results in video_frames.items():
+        for frame in frame_results:
+            frame_id = frame.frame_idx
+
+            for detection in frame.detections:
+                track_id = detection.track_id
+                x1, y1, x2, y2 = detection.bbox
+                conf = detection.confidence
+                category = detection.category
+
+                tup = video_id, frame_id, track_id, x1, y1, x2, y2, conf, category
+                rows.append(tup)
+
+    with open(fout, "w", encoding="utf-8", newline="") as outfile:
+        writer = csv.writer(outfile)
+        writer.writerow(["video_id", "frame_id", "track_id", "x1", "y1", "x2", "y2", "conf", "category"])
+        writer.writerows(rows)
 
 
 def vocab_mapping(predict) -> str:

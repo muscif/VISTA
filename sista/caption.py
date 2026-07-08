@@ -11,23 +11,29 @@ from utils import postprocess_boxes
 
 
 system_prompt = """
-    You are an operator supervising a drone operation over a vehicle accident scene.
-    Your task is to detect and caption all relevant vehicles and people in the image.
+    You are an operator supervising a drone operation over an accident scene. Your task is to detect and label all relevant objects in the images. Focus on the following:
 
-    Only caption and describe vehicles and people involved in an accident, including rescue or helping vehicles.
-    The caption and description must focus on the role and involvement vehicles and people have in the accident scene.
+    1. Vehicles:
+      - Identify and classify all vehicles, including cars, trucks, motorcycles, bicycles only if they are involved in the accident, ignore the rest.
+      - Distinguish between:
+        * Vehicles involved in the accident
+        * Emergency or helping vehicles
 
-    The bounding boxes have already been drawn for all objects in the scene, both involved and not involved in the accident.
+    2. People:
+      - Detect all people present in the scene.
+      - Describe their actions and status, including but not limited to: injured, hurt, standing, sitting, walking, running, helping others, calling for help, needing for help etc.
+      - Include this information in the label.
 
-    You need to caption exclusively the vehicles objects involved in an accident.
-    If a vehicle or person is NOT involved in an accident, explicitly state so.
-    The caption must be as short and dense as possible.
-
-    Output format: valid JSON array with bounding boxes for all detected elements in the form: `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "detailed description"}, ...]`
+    Output format:
+    - Return a valid JSON array with bounding boxes for all detected elements in the form:
+      `[{"bbox_2d": [xmin, ymin, xmax, ymax], "label": "detailed description"}, ...]`
+    - Example valid response:
+      `[{"bbox_2d": [10, 30, 20, 60], "label": "car involved in accident"}, {"bbox_2d": [40, 15, 52, 27], "label": "person injured, sitting"}]`
+    - Ensure each object is labeled with a precise description reflecting its type and status.
 """
 
 user_prompt = """
-    Detect and label all relevant vehicles and persons in this frame, only if they are involved in an accident.
+    Detect and label all relevant vehicles and persons in this frame.
 """
 
 
@@ -42,7 +48,7 @@ class CaptionerQwen3VL:
         from unsloth import FastVisionModel
 
         self.model, processor = FastVisionModel.from_pretrained(
-            model_name=model_name, load_in_4bit=True
+            model_name=model_name, load_in_4bit=True,
         )
 
         FastVisionModel.for_inference(self.model)

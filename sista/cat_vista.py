@@ -1,11 +1,12 @@
 from PIL import Image
 from supervision.detection.core import Detections
 from trackers import BoTSORTTracker as Tracker
+from rfdetr.assets.coco_classes import COCO_CLASSES
 import torch
 import torch.nn.functional as F
 
 from caption import Caption, CaptionerQwen3VL
-from utils import _iou, draw_bboxes_single, vocab_mapping, get_smallest_bbox
+from utils import _iou, draw_bboxes_single, get_smallest_bbox
 from base import Detection, VistaPipeline, FrameResult
 from tracker import Embedder
 
@@ -18,13 +19,16 @@ class SISTA(VistaPipeline):
         embedder_name="facebook/dinov2-with-registers-large",
         caption_iou_threshold=0.5,
         reid_similarity_threshold=0.5,
+        caption=False,
     ):
         from rfdetr_plus import RFDETR2XLarge as RFDETR
-        #from rfdetr import RFDETRLarge as RFDETR
+        # from rfdetr import RFDETRLarge as RFDETR
 
         embedder = Embedder(embedder_name)
 
+        self.embedder_name = embedder_name
         self.tracker_name = tracker_name
+        self.reid_similarity_threshold = reid_similarity_threshold
 
         match self.tracker_name:
             case "am":
@@ -38,12 +42,13 @@ class SISTA(VistaPipeline):
             case _:
                 self.deep_tracker = None
 
-
         self.model = RFDETR()
         self.model.optimize_for_inference(dtype=torch.bfloat16, compile=True)
         self.tracker = Tracker(enable_cmc=True)
+        self.caption = caption
         self.captioner = None
-        # self.captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct-FP8")
+        if self.caption:
+            self.captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct-FP8")
         self.caption_stride = caption_stride
         self.caption_iou_threshold = caption_iou_threshold
         self.history = {}
@@ -51,15 +56,18 @@ class SISTA(VistaPipeline):
         self.draw_bboxes = False
 
     def forward(self, frame: Image.Image, frame_idx: int) -> FrameResult:
-        results = self.model.predict(frame, shape=(1400,1400))
-        results = self.tracker.update(results, frame=results.metadata["source_image"])
+        results = self.model.predict(frame)
+        results = self.tracker.update(results)#, frame=results.metadata["source_image"])
 
         if self.deep_tracker:
             results = self.deep_tracker.update(results, frame, self.tracker)
 
         detections = {
-            int(res[4]): Detection(res[0].tolist(), vocab_mapping(res[3]), 1, int(res[4]))
-            for i, res in enumerate(results) if int(res[4]) != -1
+            int(res[4]): Detection(
+                bbox=res[0].tolist(), category=COCO_CLASSES[res[3]], confidence=res[2], track_id=int(res[4])
+            )
+            for i, res in enumerate(results)
+            if int(res[4]) != -1
         }
 
         if self.draw_bboxes:
@@ -67,7 +75,7 @@ class SISTA(VistaPipeline):
 
         min_x1 = min_y1 = max_x2 = max_y2 = 0
 
-        if self.captioner and frame_idx % self.caption_stride == 0:
+        if self.captioner and frame_idx % self.caption_stride == 0 and len(results.xyxy) > 0:
             if self.crop:
                 min_x1, min_y1, max_x2, max_y2 = get_smallest_bbox(detections)
                 frame = frame.crop((min_x1, min_y1, max_x2, max_y2))
@@ -104,4 +112,7 @@ class SISTA(VistaPipeline):
 
     def reset(self):
         super().reset()
-        self.__init__(self.caption_stride, tracker_name=self.tracker_name)
+        self.history = {}
+        self.tracker = Tracker(enable_cmc=True)
+        if self.deep_tracker:
+            self.deep_tracker.reset()
