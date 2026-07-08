@@ -2,7 +2,7 @@ import unsloth
 
 from abc import ABC
 from dataclasses import dataclass
-import json
+import json_repair
 
 from PIL import Image
 import torch
@@ -80,16 +80,8 @@ class CaptionerQwen3VL:
         gen_ids = [o[len(i):] for i, o in zip(inputs["input_ids"], out_ids)]
         raw_output = self.processor.batch_decode(gen_ids, skip_special_tokens=True)[0]
 
-        cleaned_output = raw_output.strip()
-        
-        # Strip markdown code blocks if present
-        if cleaned_output.startswith("```json"):
-            cleaned_output = cleaned_output.split("```json")[1].split("```")[0].strip()
-        elif cleaned_output.startswith("```"):
-            cleaned_output = cleaned_output.split("```")[1].split("```")[0].strip()
-
         try:
-            data = json.loads(cleaned_output)
+            data = json_repair.loads(raw_output)
             data = postprocess_boxes(data, img)
             
             captions = []
@@ -105,7 +97,7 @@ class CaptionerQwen3VL:
                         )
                     )
             return captions
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+        except (json_repair.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             # Fallback/Error handling if the model generates malformed JSON
             print(f"Failed to parse model response to JSON: {e}")
             print(f"Raw response was: {raw_output}")

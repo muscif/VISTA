@@ -1,3 +1,5 @@
+import unsloth
+
 from PIL import Image
 from supervision.detection.core import Detections
 from trackers import BoTSORTTracker as Tracker
@@ -73,9 +75,9 @@ class SISTA(VistaPipeline):
         if self.draw_bboxes:
             frame = draw_bboxes_single(frame, detections)
 
-        min_x1 = min_y1 = max_x2 = max_y2 = 0
-
-        if self.captioner and frame_idx % self.caption_stride == 0 and len(results.xyxy) > 0:
+        if self.captioner and frame_idx % self.caption_stride == 0 and detections:
+            min_x1 = min_y1 = max_x2 = max_y2 = 0
+            
             if self.crop:
                 min_x1, min_y1, max_x2, max_y2 = get_smallest_bbox(detections)
                 frame = frame.crop((min_x1, min_y1, max_x2, max_y2))
