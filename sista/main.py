@@ -12,11 +12,11 @@ os.environ["HF_HUB_DISABLE_XET"] = "1"
 
 if __name__=="__main__":
     tracker_name = "acm"
-    model = SISTA(tracker_name=tracker_name, caption_stride=60, caption=True)
+    model = SISTA(tracker_name=tracker_name, caption_stride=60, caption=False)
 
     things = [
-        (PATH_VISTA / "train" / "20251120" / "DJI_20251120172410_0001_S.mp4", 12500, 12780),
-        #(PATH_VISTA / "train" / "20251205" / "DJI_20251205134959_0001_S.mp4", 2320, 3070),
+        #(PATH_VISTA / "train" / "20251120" / "DJI_20251120172410_0001_S.mp4", 12500, 12780),
+        (PATH_VISTA / "train" / "20251205" / "DJI_20251205134959_0001_S.mp4", 2320, 3070),
         #(PATH_VISTA / "train" / "20251204" / "DJI_20251204135749_0001_S.mp4", 676, 740),
         #(PATH_VISTA / "train" / "20260318" / "DJI_20260318101426_0002_V.MP4", 5800, 7300),
         #(PATH_VISTA / "train" / "20260318" / "DJI_20260318102010_0003_V.MP4", 4778, 6128)

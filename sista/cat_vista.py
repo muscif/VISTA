@@ -50,7 +50,7 @@ class SISTA(VistaPipeline):
         self.caption = caption
         self.captioner = None
         if self.caption:
-            self.captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct-FP8")
+            self.captioner = CaptionerQwen3VL("Qwen/Qwen3-VL-4B-Instruct")
         self.caption_stride = caption_stride
         self.caption_iou_threshold = caption_iou_threshold
         self.history = {}
@@ -77,7 +77,7 @@ class SISTA(VistaPipeline):
 
         if self.captioner and frame_idx % self.caption_stride == 0 and detections:
             min_x1 = min_y1 = max_x2 = max_y2 = 0
-            
+
             if self.crop:
                 min_x1, min_y1, max_x2, max_y2 = get_smallest_bbox(detections)
                 frame = frame.crop((min_x1, min_y1, max_x2, max_y2))

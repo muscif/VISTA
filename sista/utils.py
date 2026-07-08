@@ -47,13 +47,16 @@ def compute_fps(fps_stats: dict[str, list], fout="fps_stats.csv"):
 def postprocess_boxes(data, img):
     width, height = img.size
     for item in data:
-        x1, y1, x2, y2 = item["bbox_2d"]
-        item["bbox_2d"] = [
-            x1 / 1000 * width,
-            y1 / 1000 * height,
-            x2 / 1000 * width,
-            y2 / 1000 * height,
-        ]
+        if "bbox_2d" in item:
+            t = item["bbox_2d"]
+            if len(t) == 4:
+                x1, y1, x2, y2 = item["bbox_2d"]
+                item["bbox_2d"] = [
+                    x1 / 1000 * width,
+                    y1 / 1000 * height,
+                    x2 / 1000 * width,
+                    y2 / 1000 * height,
+                ]
     return data
 
 

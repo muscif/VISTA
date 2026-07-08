@@ -1,3 +1,4 @@
+import os
 import time
 
 from tqdm import tqdm
@@ -5,15 +6,17 @@ from tqdm import tqdm
 from cat_vista import SISTA
 from utils import draw_bboxes, PATH_VISTA, prediction_tracks, predictions_mot, compute_fps
 
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+
 if __name__=="__main__":
     tracker_name = "acm"
-    model = SISTA(tracker_name=tracker_name, caption_stride=300, caption=True)
+    model = SISTA(tracker_name=tracker_name, caption_stride=300, caption=False)
 
     things = [
-        #(PATH_VISTA / "test" / "20251210" / "DJI_20251210134636_0001_S.mp4", 0, 6695),
-        #(PATH_VISTA / "test" / "20251210" / "DJI_20251210140457_0001_S.mp4", 0, 9320),
+        (PATH_VISTA / "test" / "20251210" / "DJI_20251210134636_0001_S.mp4", 0, 6695),
+        (PATH_VISTA / "test" / "20251210" / "DJI_20251210140457_0001_S.mp4", 0, 9320),
         (PATH_VISTA / "test" / "20251217" / "DJI_20251217111534_0001_S.mp4", 0, 25874),
-        #(PATH_VISTA / "test" / "20251217" / "DJI_20251217114349_0001_S.MP4", 0, 9237),
+        (PATH_VISTA / "test" / "20251217" / "DJI_20251217114349_0001_S.mp4", 0, 9237),
     ]
 
 
